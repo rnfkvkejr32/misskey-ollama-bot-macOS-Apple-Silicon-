@@ -1,6 +1,8 @@
 <div align="center">
   <img src="./docs/assets/banner.svg" alt="Misskey Ollama Bot banner" width="100%" />
 
+Original git project: https://github.com/Eidenz/MisskeyLLM
+
   # Misskey Ollama Bot
 
   **Ollama 또는 OpenAI 호환 LLM API를 사용해 Misskey의 멘션과 답글에 응답하는 셀프 호스팅 AI 봇입니다.**
