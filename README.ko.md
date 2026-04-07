@@ -68,13 +68,13 @@ Misskey Ollama Bot은 Misskey에서 **멘션**과 **답글**을 감지하고, **
 ### 봇 개요 화면
 
 <p align="center">
-  <img src="./docs/images/screenshot-overview.svg" alt="Overview placeholder" width="900" />
+  <img src="./docs/images/screenshot-overview.png" alt="Overview placeholder" width="900" />
 </p>
 
 ### 답글 예시 화면
 
 <p align="center">
-  <img src="./docs/images/screenshot-reply.svg" alt="Reply placeholder" width="900" />
+  <img src="./docs/images/screenshot-reply.png" alt="Reply placeholder" width="900" />
 </p>
 
 ---

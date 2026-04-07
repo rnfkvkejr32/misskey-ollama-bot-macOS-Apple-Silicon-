@@ -68,13 +68,13 @@ It is built for practical self-hosting, with features such as:
 ### Bot Overview
 
 <p align="center">
-  <img src="./docs/images/screenshot-overview.svg" alt="Overview placeholder" width="900" />
+  <img src="./docs/images/screenshot-overview.png" alt="Overview placeholder" width="900" />
 </p>
 
 ### Reply Example
 
 <p align="center">
-  <img src="./docs/images/screenshot-reply.svg" alt="Reply placeholder" width="900" />
+  <img src="./docs/images/screenshot-reply.png" alt="Reply placeholder" width="900" />
 </p>
 
 ---
