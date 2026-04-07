@@ -30,6 +30,9 @@ It is built for practical self-hosting, with features such as:
 - Docker Compose deployment
 - support for both local and remote Misskey users
 
+The project was created under the leadership of ChatGPT.
+I'm not a developer, and I can't write down a line of code myself.
+
 ---
 
 ## Table of Contents
