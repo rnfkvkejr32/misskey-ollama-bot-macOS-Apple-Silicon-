@@ -63,8 +63,6 @@ It is built for practical self-hosting, with features such as:
 
 ## Screenshots
 
-> Replace the placeholder images below with your own screenshots after deployment.
-
 ### Bot Overview
 
 <p align="center">
@@ -84,8 +82,8 @@ It is built for practical self-hosting, with features such as:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_NAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/rnfkvkejr32/misskey-ollama-bot-macOS-Apple-Silicon-.git
+cd misskey-ollama-bot-macOS-Apple-Silicon-
 ```
 
 ### 2. Create your environment file
@@ -101,7 +99,7 @@ Fill in your Misskey token, LLM endpoint, and model name.
 ### 4. Build and run
 
 ```bash
-docker compose up -d --build
+sudo docker compose build && sudo docker compose up -d
 ```
 
 ### 5. Check logs
