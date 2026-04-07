@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./docs/assets/banner.svg" alt="Misskey Ollama Bot banner" width="100%" />
+  <img src="./docs/assets/banner.png" alt="Misskey Ollama Bot banner" width="100%" />
 
 Original git project: https://github.com/Eidenz/MisskeyLLM
 
