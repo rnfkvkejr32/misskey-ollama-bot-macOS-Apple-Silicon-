@@ -1,311 +1,226 @@
-<div align="center">
-  <img src="./docs/assets/banner.png" alt="Misskey Ollama Bot banner" width="100%" />
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Misskey LLM Bot" width="100%" />
+</p>
 
-Original git project: https://github.com/Eidenz/MisskeyLLM
+<p align="center">
+  <strong>Misskey LLM Bot</strong><br>
+  A self-hosted Misskey bot with Ollama/OpenAI-compatible text replies and optional ComfyUI image generation.
+</p>
 
-  # Misskey Ollama Bot
-
-  **A self-hosted AI reply bot for Misskey powered by Ollama or any OpenAI-compatible LLM API.**
-
-  [![Docker Compose](https://img.shields.io/badge/docker-compose-ready-2496ED?logo=docker&logoColor=white)](#quick-start)
-  [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](#requirements)
-  [![Ollama](https://img.shields.io/badge/ollama-supported-111111)](#llm-backend-examples)
-  [![Misskey](https://img.shields.io/badge/misskey-compatible-86B300)](#features)
-  [![License](https://img.shields.io/badge/license-MIT-F7DF1E)](#license)
-
-  [English](./README.md) · [한국어](./README.ko.md)
-</div>
-
----
+<p align="center">
+  <a href="./README.ko.md">한국어</a>
+</p>
 
 ## Overview
 
-Misskey Ollama Bot is a simple self-hosted bot that watches for **mentions** and **replies** on Misskey, generates a response with **Ollama** or any **OpenAI-compatible API**, and posts the result back automatically.
+Misskey Ollama Bot is a self-hosted bot for Misskey that watches for mentions and replies, generates text with Ollama or any OpenAI-compatible API, and can optionally generate images through an external ComfyUI Desktop instance.
 
-It is built for practical self-hosting, with features such as:
+It is designed for practical deployment rather than demo-only usage, with support for:
 
 - mention and reply handling
+- local and federated remote users
 - relationship-based access control
-- optional auto follow-back
+- automatic follow-back
 - Docker Compose deployment
-- support for both local and remote Misskey users
-
-The project was created under the leadership of ChatGPT.
-I'm not a developer, and I can't write down a line of code myself.
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Quick Start](#quick-start)
-- [Requirements](#requirements)
-- [Configuration](#configuration)
-- [Access Modes](#access-modes)
-- [LLM Backend Examples](#llm-backend-examples)
-- [Docker Compose](#docker-compose)
-- [Project Structure](#project-structure)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
-
----
+- Apple Silicon-friendly host workflows
+- optional ComfyUI image generation
+- safer image reply visibility clamping (`public -> home`)
 
 ## Features
 
-- Replies to **mentions** automatically
-- Replies to **thread replies** aimed at the bot
-- Supports **Ollama** and **OpenAI-compatible chat APIs**
-- Can restrict usage to **local users**, **followed users**, or both
-- Optional **auto follow-back**
-- Works with **local and federated remote users**
-- Handles **Misskey streaming reconnects** gracefully
-- Designed for **Docker Compose** deployment
-
----
+- Replies to Misskey mentions automatically
+- Handles thread replies addressed to the bot
+- Supports Ollama and OpenAI-compatible text APIs
+- Optional image generation via external ComfyUI Desktop
+- Supports local and federated remote Misskey users
+- Relationship-based access control
+- Optional automatic follow-back
+- Graceful WebSocket reconnect handling
+- Docker Compose deployment
+- Safer image reply visibility handling
+  - `public -> home`
+  - `home -> home`
+  - `followers -> followers`
+  - `specified -> specified`
 
 ## Screenshots
 
-### Bot Overview
+### Project Banner
+
+Repository banner used for the project page.
 
 <p align="center">
-  <img src="./docs/images/screenshot-overview.png" alt="Overview placeholder" width="900" />
+  <img src="docs/assets/banner.png" alt="Project Banner" width="100%" />
+</p>
+
+### Bot Overview
+
+Example repository overview image.
+
+<p align="center">
+  <img src="docs/images/screenshot-overview.svg" alt="Bot Overview" width="100%" />
 </p>
 
 ### Reply Example
 
+Sample mention/reply flow image.
+
 <p align="center">
-  <img src="./docs/images/screenshot-reply.png" alt="Reply placeholder" width="900" />
+  <img src="docs/images/screenshot-reply.svg" alt="Reply Example" width="100%" />
 </p>
 
----
+## Project structure
 
-## Quick Start
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/rnfkvkejr32/misskey-ollama-bot-macOS-Apple-Silicon-.git
-cd misskey-ollama-bot-macOS-Apple-Silicon-
+```text
+.
+├─ bot.js
+├─ package.json
+├─ compose.yaml
+├─ Dockerfile
+├─ .env.example
+├─ workflows/
+│  └─ anima_preview3_qwen_txt2img_api.json
+└─ docs/
+   ├─ assets/banner.png
+   └─ images/
 ```
 
-### 2. Create your environment file
+## Requirements
+
+- Docker Engine with Compose
+- a Misskey bot token
+- a text backend such as Ollama or another OpenAI-compatible API
+- ComfyUI Desktop running on the host machine if you want image generation
+
+## Quick start
+
+1. Copy the sample environment file.
 
 ```bash
 cp .env.example .env
 ```
 
-### 3. Edit `.env`
+2. Edit `.env`.
 
-Fill in your Misskey token, LLM endpoint, and model name.
-
-### 4. Build and run
-
-```bash
-sudo docker compose build && sudo docker compose up -d
-```
-
-### 5. Check logs
-
-```bash
-docker compose logs -f misskey-llm-bot
-```
-
----
-
-## Requirements
-
-- A **Misskey** account for the bot
-- A Misskey API token with the required permissions
-- **Docker** and **Docker Compose**
-- One LLM backend:
-  - **Ollama**
-  - or an **OpenAI-compatible API**
-
----
-
-## Configuration
-
-### Example `.env`
+Minimum text-only example:
 
 ```dotenv
-# Misskey
-MISSKEY_BASE_URL=https://your-misskey.example
-MISSKEY_TOKEN=your_misskey_token
+MISSKEY_BASE_URL=https://misskey.example.com
+MISSKEY_TOKEN=put_your_misskey_token_here
+LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5:7b
+ENABLE_IMAGE_GENERATION=false
+```
 
-# LLM
+ComfyUI image example:
+
+```dotenv
+MISSKEY_BASE_URL=https://misskey.example.com
+MISSKEY_TOKEN=put_your_misskey_token_here
 LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
 LLM_API_KEY=ollama
 LLM_MODEL=qwen2.5:7b
 
-# Bot behavior
-SYSTEM_PROMPT=You are a friendly Misskey AI bot.
-MAX_TOKENS=400
-TEMPERATURE=0.7
-
-# Access control
-ACCESS_MODE=following_or_local
-ALLOWED_INSTANCE=gameguard.moe
-
-# Auto follow-back
-AUTO_FOLLOW_BACK=true
-AUTO_FOLLOW_LOCAL_ONLY=false
-
-# Debug
-RELATION_DEBUG=false
-LOG_LEVEL=info
+ENABLE_IMAGE_GENERATION=true
+COMFYUI_BASE_URL=http://host.docker.internal:8000
+COMFYUI_WORKFLOW_FILE=/app/workflows/anima_preview3_qwen_txt2img_api.json
+COMFYUI_DIFFUSION_MODEL=anima-preview3-base.safetensors
+COMFYUI_TEXT_ENCODER=qwen_3_06b_base.safetensors
+COMFYUI_VAE=qwen_image_vae.safetensors
 ```
 
-### Recommended Misskey token permissions
-
-- `read:account`
-- `read:notifications`
-- `write:notes`
-- `write:following`
-
----
-
-## Access Modes
-
-| Mode | Description |
-| --- | --- |
-| `off` | Allow everyone |
-| `local_only` | Allow only local users from your instance |
-| `followers_only` | Allow only users who follow the bot |
-| `following_only` | Allow only users followed by the bot |
-| `followers_or_local` | Allow local users or bot followers |
-| `following_or_local` | Allow local users or users followed by the bot |
-| `mutual_or_local` | Allow local users or users connected by either follow direction |
-
----
-
-## LLM Backend Examples
-
-### Ollama via OpenAI-compatible endpoint
-
-```dotenv
-LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
-LLM_API_KEY=ollama
-LLM_MODEL=qwen2.5:7b
-```
-
-### Ollama via native API
-
-```dotenv
-LLM_API_URL=http://host.docker.internal:11434/api/chat
-LLM_API_KEY=
-LLM_MODEL=qwen2.5:7b
-```
-
-### Other OpenAI-compatible APIs
-
-```dotenv
-LLM_API_URL=https://your-api.example/v1/chat/completions
-LLM_API_KEY=your_api_key
-LLM_MODEL=your_model_name
-```
-
----
-
-## Docker Compose
-
-### Example `compose.yaml`
-
-```yaml
-services:
-  misskey-llm-bot:
-    build: .
-    container_name: misskey-llm-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-```
-
-### Common commands
+3. Build and start the bot.
 
 ```bash
 docker compose up -d --build
-docker compose logs -f misskey-llm-bot
-docker compose restart
-docker compose down
 ```
 
----
+4. Watch logs.
 
-## Project Structure
+```bash
+docker compose logs -f misskey-llm-bot
+```
+
+## ComfyUI notes
+
+This repository does **not** bundle ComfyUI itself.  
+It expects an external ComfyUI Desktop instance, usually reachable from the bot container at:
 
 ```text
-.
-├─ bot.js
-├─ Dockerfile
-├─ compose.yaml
-├─ package.json
-├─ .env.example
-├─ .gitignore
-├─ .dockerignore
-├─ docs/
-│  ├─ assets/
-│  │  └─ banner.svg
-│  └─ images/
-│     ├─ screenshot-overview.svg
-│     └─ screenshot-reply.svg
-├─ README.md
-└─ README.ko.md
+http://host.docker.internal:8000
 ```
 
----
+The included workflow targets the Anima Preview3 stack:
 
-## Troubleshooting
+- `anima-preview3-base.safetensors`
+- `qwen_3_06b_base.safetensors`
+- `qwen_image_vae.safetensors`
 
-### The bot only replies to local users
+The Compose file mounts `./workflows` into the container so the bot can read the workflow file without rebuilding every time.
 
-Check these first:
+## Commands
 
-- `ACCESS_MODE`
-- whether the bot actually follows the remote user
-- whether `RELATION_DEBUG=true` shows a valid relation object
-- whether the remote mention reaches the bot through Misskey streaming
+Text reply:
+```text
+@bot hello
+```
 
-### The bot starts but never posts a reply
+Image reply:
+```text
+@bot /img a whale flying in a blue sky
+@bot /image cozy greenhouse at night
+@bot /그림 별이 가득한 겨울 숲
+```
 
-Check:
+## Access control
 
-- `MISSKEY_BASE_URL`
-- `MISSKEY_TOKEN`
-- `LLM_API_URL`
-- `LLM_MODEL`
-- container logs
+Set `ACCESS_MODE` in `.env`.
 
-### The container runs but Ollama is unreachable
+Supported modes:
 
-For Docker Desktop on macOS, this is often the simplest option:
+- `off`
+- `local_only`
+- `followers_only`
+- `following_only`
+- `followers_or_local`
+- `following_or_local`
+- `mutual_or_local`
+
+Example:
 
 ```dotenv
-LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
+ACCESS_MODE=following_or_local
+ALLOWED_INSTANCE=misskey.example.com
 ```
 
----
+## Follow-back
 
-## Roadmap
+Enable automatic follow-back:
 
-- [ ] Add richer persona presets
-- [ ] Optional per-user cooldowns
-- [ ] Optional admin allow/block list
-- [ ] Better message formatting controls
-- [ ] Example screenshots from a live deployment
+```dotenv
+AUTO_FOLLOW_BACK=true
+```
 
----
+Only follow back users on the same instance:
 
-## Contributing
+```dotenv
+AUTO_FOLLOW_LOCAL_ONLY=true
+```
 
-Issues and pull requests are welcome.
+## Notes
 
-If you plan to publish improvements, keeping configuration generic and secret-free makes the project easier for others to adopt.
-
----
+- Normal text replies inherit the incoming visibility by default.
+- Generated image replies are clamped safely:
+  - `public` image replies become `home`
+  - narrower visibilities stay narrow
+- Keep `.env` out of Git.
+- If you use Docker with `sudo`, add it to the commands.
 
 ## License
 
-MIT License.
+MIT. See [LICENSE](./LICENSE).
+
+## Upstream
+
+See [UPSTREAM.md](./UPSTREAM.md).

@@ -1,9 +1,9 @@
 {
-  "name": "misskey-ollama-bot",
+  "name": "misskey-llm-bot-comfyui",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Misskey mention bot for Ollama and other OpenAI-compatible APIs, ready for Docker Compose.",
+  "description": "Misskey mention bot for Ollama/OpenAI-compatible APIs with optional ComfyUI image generation, access control, and follow-back support.",
   "scripts": {
     "start": "node bot.js",
     "check": "node --check bot.js"
@@ -14,6 +14,7 @@
   "dependencies": {
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",
+    "form-data": "^4.0.1",
     "ws": "^8.18.0"
   }
 }

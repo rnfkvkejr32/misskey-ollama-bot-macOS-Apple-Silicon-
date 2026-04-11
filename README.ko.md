@@ -1,311 +1,226 @@
-<div align="center">
-  <img src="./docs/assets/banner.png" alt="Misskey Ollama Bot banner" width="100%" />
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Misskey LLM Bot" width="100%" />
+</p>
 
-Original git project: https://github.com/Eidenz/MisskeyLLM
+<p align="center">
+  <strong>Misskey LLM Bot</strong><br>
+  Ollama/OpenAI 호환 텍스트 답변과 선택적 ComfyUI 이미지 생성을 지원하는 셀프 호스팅 Misskey 봇입니다.
+</p>
 
-  # Misskey Ollama Bot
-
-  **Ollama 또는 OpenAI 호환 LLM API를 사용해 Misskey의 멘션과 답글에 응답하는 셀프 호스팅 AI 봇입니다.**
-
-  [![Docker Compose](https://img.shields.io/badge/docker-compose-ready-2496ED?logo=docker&logoColor=white)](#빠른-시작)
-  [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](#요구-사항)
-  [![Ollama](https://img.shields.io/badge/ollama-supported-111111)](#llm-백엔드-예시)
-  [![Misskey](https://img.shields.io/badge/misskey-compatible-86B300)](#기능)
-  [![License](https://img.shields.io/badge/license-MIT-F7DF1E)](#라이선스)
-
-  [English](./README.md) · [한국어](./README.ko.md)
-</div>
-
----
+<p align="center">
+  <a href="./README.md">English</a>
+</p>
 
 ## 개요
 
-Misskey Ollama Bot은 Misskey에서 **멘션**과 **답글**을 감지하고, **Ollama** 또는 **OpenAI 호환 API**를 이용해 응답을 생성한 뒤 자동으로 답글을 작성하는 셀프 호스팅 봇입니다.
+Misskey Ollama Bot은 Misskey의 멘션과 답글을 감지하고, Ollama 또는 OpenAI 호환 API로 텍스트 응답을 생성하며, 필요할 경우 외부 ComfyUI Desktop 인스턴스를 통해 이미지까지 생성할 수 있는 셀프 호스팅 봇입니다.
 
-실제 운영에 필요한 기능을 유지하면서도, **Docker Compose**로 쉽게 배포할 수 있도록 구성했습니다.
+데모용이 아니라 실제 운영을 염두에 두고 구성되어 있으며, 다음 기능을 지원합니다.
 
-- 멘션 및 답글 자동 응답
+- 멘션 및 답글 처리
+- 로컬 및 연합된 외부 인스턴스 사용자 대응
+- 관계 기반 접근 제어
+- 자동 맞팔
+- Docker Compose 배포
+- Apple Silicon 친화적 호스트 워크플로
+- 선택적 ComfyUI 이미지 생성
+- 이미지 답글의 안전한 공개 범위 보정 (`public -> home`)
+
+## 주요 기능
+
+- Misskey 멘션에 자동으로 답변
+- 봇을 대상으로 한 스레드 답글 처리
+- Ollama 및 OpenAI 호환 텍스트 API 지원
+- 외부 ComfyUI Desktop을 통한 선택적 이미지 생성
+- 로컬 및 외부 연합 인스턴스 사용자 지원
 - 관계 기반 접근 제어
 - 선택적 자동 맞팔
-- Docker Compose 배포
-- 로컬 사용자와 연합 원격 사용자 지원
-
-해당 프로젝트는 ChatGPT의 주도 하에 만들어졌습니다.
-전 개발자가 아니며 코드 한줄 직접 적을 수 없습니다.
-
----
-
-## 목차
-
-- [기능](#기능)
-- [스크린샷](#스크린샷)
-- [빠른 시작](#빠른-시작)
-- [요구 사항](#요구-사항)
-- [설정](#설정)
-- [접근 모드](#접근-모드)
-- [LLM 백엔드 예시](#llm-백엔드-예시)
-- [Docker Compose](#docker-compose)
-- [프로젝트 구조](#프로젝트-구조)
-- [문제 해결](#문제-해결)
-- [로드맵](#로드맵)
-- [기여하기](#기여하기)
-- [라이선스](#라이선스)
-
----
-
-## 기능
-
-- **멘션**에 자동 응답
-- 봇을 향한 **스레드 답글**에 응답
-- **Ollama** 및 **OpenAI 호환 chat API** 지원
-- **로컬 사용자**, **봇이 팔로우한 사용자** 등 조건별 접근 제한
-- 선택적 **자동 맞팔** 기능
-- **로컬 사용자와 외부 인스턴스 사용자** 모두 지원
-- Misskey 스트리밍 재연결 처리
-- **Docker Compose** 배포에 적합한 구조
-
----
+- 안정적인 WebSocket 재연결 처리
+- Docker Compose 배포 지원
+- 이미지 답글 공개 범위 안전 처리
+  - `public -> home`
+  - `home -> home`
+  - `followers -> followers`
+  - `specified -> specified`
 
 ## 스크린샷
 
-### 봇 개요 화면
+### 프로젝트 배너
+
+저장소 메인 페이지에 사용하는 배너 이미지입니다.
 
 <p align="center">
-  <img src="./docs/images/screenshot-overview.png" alt="Overview placeholder" width="900" />
+  <img src="docs/assets/banner.png" alt="프로젝트 배너" width="100%" />
 </p>
 
-### 답글 예시 화면
+### 봇 개요
+
+저장소 개요 예시 이미지입니다.
 
 <p align="center">
-  <img src="./docs/images/screenshot-reply.png" alt="Reply placeholder" width="900" />
+  <img src="docs/images/screenshot-overview.svg" alt="봇 개요" width="100%" />
 </p>
 
----
+### 답글 예시
 
-## 빠른 시작
+멘션/답글 흐름 예시 이미지입니다.
 
-### 1. 저장소 클론
-
-```bash
-git clone https://github.com/rnfkvkejr32/misskey-ollama-bot-macOS-Apple-Silicon-.git
-cd misskey-ollama-bot-macOS-Apple-Silicon-
-```
-
-### 2. 환경 파일 생성
-
-```bash
-cp .env.example .env
-```
-
-### 3. `.env` 수정
-
-Misskey 토큰, LLM 주소, 모델 이름 등을 실제 값으로 입력하세요.
-
-### 4. 빌드 및 실행
-
-```bash
-sudo docker compose build && sudo docker compose up -d
-```
-
-### 5. 로그 확인
-
-```bash
-docker compose logs -f misskey-llm-bot
-```
-
----
-
-## 요구 사항
-
-- 봇용 **Misskey 계정**
-- 필요한 권한이 포함된 Misskey API 토큰
-- **Docker** 및 **Docker Compose**
-- 아래 중 하나의 LLM 백엔드
-  - **Ollama**
-  - 또는 **OpenAI 호환 API**
-
----
-
-## 설정
-
-### 예시 `.env`
-
-```dotenv
-# Misskey
-MISSKEY_BASE_URL=https://your-misskey.example
-MISSKEY_TOKEN=your_misskey_token
-
-# LLM
-LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
-LLM_API_KEY=ollama
-LLM_MODEL=qwen2.5:7b
-
-# 봇 동작
-SYSTEM_PROMPT=You are a friendly Misskey AI bot.
-MAX_TOKENS=400
-TEMPERATURE=0.7
-
-# 접근 제어
-ACCESS_MODE=following_or_local
-ALLOWED_INSTANCE=gameguard.moe
-
-# 자동 맞팔
-AUTO_FOLLOW_BACK=true
-AUTO_FOLLOW_LOCAL_ONLY=false
-
-# 디버그
-RELATION_DEBUG=false
-LOG_LEVEL=info
-```
-
-### 권장 Misskey 토큰 권한
-
-- `read:account`
-- `read:notifications`
-- `write:notes`
-- `write:following`
-
----
-
-## 접근 모드
-
-| 모드 | 설명 |
-| --- | --- |
-| `off` | 모두 허용 |
-| `local_only` | 현재 인스턴스의 로컬 사용자만 허용 |
-| `followers_only` | 봇을 팔로우한 사용자만 허용 |
-| `following_only` | 봇이 팔로우한 사용자만 허용 |
-| `followers_or_local` | 로컬 사용자 또는 봇 팔로워 허용 |
-| `following_or_local` | 로컬 사용자 또는 봇이 팔로우한 사용자 허용 |
-| `mutual_or_local` | 로컬 사용자 또는 어느 한쪽이든 팔로우 관계가 있는 사용자 허용 |
-
----
-
-## LLM 백엔드 예시
-
-### Ollama OpenAI 호환 엔드포인트
-
-```dotenv
-LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
-LLM_API_KEY=ollama
-LLM_MODEL=qwen2.5:7b
-```
-
-### Ollama native API
-
-```dotenv
-LLM_API_URL=http://host.docker.internal:11434/api/chat
-LLM_API_KEY=
-LLM_MODEL=qwen2.5:7b
-```
-
-### 기타 OpenAI 호환 API
-
-```dotenv
-LLM_API_URL=https://your-api.example/v1/chat/completions
-LLM_API_KEY=your_api_key
-LLM_MODEL=your_model_name
-```
-
----
-
-## Docker Compose
-
-### 예시 `compose.yaml`
-
-```yaml
-services:
-  misskey-llm-bot:
-    build: .
-    container_name: misskey-llm-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-```
-
-### 자주 쓰는 명령어
-
-```bash
-docker compose up -d --build
-docker compose logs -f misskey-llm-bot
-docker compose restart
-docker compose down
-```
-
----
+<p align="center">
+  <img src="docs/images/screenshot-reply.svg" alt="답글 예시" width="100%" />
+</p>
 
 ## 프로젝트 구조
 
 ```text
 .
 ├─ bot.js
-├─ Dockerfile
-├─ compose.yaml
 ├─ package.json
+├─ compose.yaml
+├─ Dockerfile
 ├─ .env.example
-├─ .gitignore
-├─ .dockerignore
-├─ docs/
-│  ├─ assets/
-│  │  └─ banner.svg
-│  └─ images/
-│     ├─ screenshot-overview.svg
-│     └─ screenshot-reply.svg
-├─ README.md
-└─ README.ko.md
+├─ workflows/
+│  └─ anima_preview3_qwen_txt2img_api.json
+└─ docs/
+   ├─ assets/banner.png
+   └─ images/
 ```
 
----
+## 요구 사항
 
-## 문제 해결
+- Docker Engine + Compose
+- Misskey 봇 토큰
+- Ollama 또는 다른 OpenAI 호환 텍스트 API
+- 이미지 생성을 사용할 경우 호스트에서 실행 중인 ComfyUI Desktop
 
-### 봇이 로컬 사용자에게만 반응할 때
+## 빠른 시작
 
-아래 항목을 먼저 확인하세요.
+1. 예시 환경 파일을 복사합니다.
 
-- `ACCESS_MODE`
-- 봇이 원격 사용자를 실제로 팔로우하고 있는지
-- `RELATION_DEBUG=true`에서 관계 객체가 정상적으로 보이는지
-- 원격 멘션이 Misskey 스트리밍으로 실제 전달되는지
+```bash
+cp .env.example .env
+```
 
-### 봇은 실행되지만 답글을 달지 않을 때
+2. `.env`를 수정합니다.
 
-다음을 확인하세요.
-
-- `MISSKEY_BASE_URL`
-- `MISSKEY_TOKEN`
-- `LLM_API_URL`
-- `LLM_MODEL`
-- 컨테이너 로그
-
-### 컨테이너는 실행되지만 Ollama에 연결되지 않을 때
-
-macOS의 Docker Desktop 환경에서는 아래 설정이 가장 단순한 경우가 많습니다.
+텍스트 전용 최소 예시:
 
 ```dotenv
+MISSKEY_BASE_URL=https://misskey.example.com
+MISSKEY_TOKEN=put_your_misskey_token_here
 LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5:7b
+ENABLE_IMAGE_GENERATION=false
 ```
 
----
+ComfyUI 이미지 생성 예시:
 
-## 로드맵
+```dotenv
+MISSKEY_BASE_URL=https://misskey.example.com
+MISSKEY_TOKEN=put_your_misskey_token_here
+LLM_API_URL=http://host.docker.internal:11434/v1/chat/completions
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5:7b
 
-- [ ] 더 다양한 페르소나 프리셋
-- [ ] 사용자별 쿨다운 옵션
-- [ ] 관리자용 허용/차단 목록
-- [ ] 답변 포맷 제어 개선
-- [ ] 실제 운영 스크린샷 추가
+ENABLE_IMAGE_GENERATION=true
+COMFYUI_BASE_URL=http://host.docker.internal:8000
+COMFYUI_WORKFLOW_FILE=/app/workflows/anima_preview3_qwen_txt2img_api.json
+COMFYUI_DIFFUSION_MODEL=anima-preview3-base.safetensors
+COMFYUI_TEXT_ENCODER=qwen_3_06b_base.safetensors
+COMFYUI_VAE=qwen_image_vae.safetensors
+```
 
----
+3. 빌드하고 실행합니다.
 
-## 기여하기
+```bash
+docker compose up -d --build
+```
 
-이슈와 풀 리퀘스트를 환영합니다.
+4. 로그를 확인합니다.
 
-설정 파일은 가능한 한 일반화하고, 비밀 정보가 없는 형태로 유지하면 다른 사람도 프로젝트를 쉽게 도입할 수 있습니다.
+```bash
+docker compose logs -f misskey-llm-bot
+```
 
----
+## ComfyUI 관련 안내
+
+이 저장소에는 ComfyUI 자체가 포함되어 있지 않습니다.  
+호스트에서 별도로 실행 중인 ComfyUI Desktop에 연결하는 방식입니다.
+
+보통 컨테이너에서는 아래 주소로 접근합니다.
+
+```text
+http://host.docker.internal:8000
+```
+
+포함된 workflow는 다음 Anima Preview3 조합을 기준으로 작성되어 있습니다.
+
+- `anima-preview3-base.safetensors`
+- `qwen_3_06b_base.safetensors`
+- `qwen_image_vae.safetensors`
+
+Compose 파일에는 `./workflows`를 컨테이너의 `/app/workflows`로 마운트하는 설정이 들어 있어 workflow 수정이 편합니다.
+
+## 명령 예시
+
+텍스트 답변:
+```text
+@bot 안녕?
+```
+
+이미지 생성:
+```text
+@bot /img 푸른 하늘을 나는 고래
+@bot /image 밤의 유리 온실
+@bot /그림 별이 가득한 겨울 숲
+```
+
+## 접근 제한
+
+`.env`의 `ACCESS_MODE`로 설정합니다.
+
+지원 모드:
+
+- `off`
+- `local_only`
+- `followers_only`
+- `following_only`
+- `followers_or_local`
+- `following_or_local`
+- `mutual_or_local`
+
+예시:
+
+```dotenv
+ACCESS_MODE=following_or_local
+ALLOWED_INSTANCE=misskey.example.com
+```
+
+## 자동 맞팔
+
+자동 맞팔 활성화:
+
+```dotenv
+AUTO_FOLLOW_BACK=true
+```
+
+같은 인스턴스 사용자에게만 자동 맞팔:
+
+```dotenv
+AUTO_FOLLOW_LOCAL_ONLY=true
+```
+
+## 참고
+
+- 일반 텍스트 답글은 기본적으로 원본 visibility를 상속합니다.
+- 생성된 이미지 답글은 더 넓어지지 않도록 안전하게 보정됩니다.
+- `.env`는 Git에 올리지 않는 것이 좋습니다.
+- Docker 명령에 `sudo`가 필요하면 앞에 붙여서 실행하면 됩니다.
 
 ## 라이선스
 
-MIT License.
+MIT. 자세한 내용은 [LICENSE](./LICENSE)를 참고하세요.
+
+## 원본 기반
+
+자세한 내용은 [UPSTREAM.md](./UPSTREAM.md)를 참고하세요.

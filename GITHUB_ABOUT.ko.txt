@@ -1,0 +1,1 @@
+Ollama/OpenAI 호환 텍스트 답변과 선택적 ComfyUI 이미지 생성을 지원하는 Misskey 봇입니다. Docker Compose와 Apple Silicon 환경을 고려해 구성했습니다.

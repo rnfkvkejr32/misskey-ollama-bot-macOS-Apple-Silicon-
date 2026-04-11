@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import WebSocket from 'ws';
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import FormData from 'form-data';
 
 dotenv.config();
 
@@ -31,6 +33,14 @@ function normalizeHost(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function guessMimeType(filename) {
+  const lower = String(filename || '').toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  return 'image/png';
+}
+
 const config = {
   misskeyBaseUrl: trimTrailingSlash(process.env.MISSKEY_BASE_URL),
   misskeyWsUrl: process.env.MISSKEY_WS_URL?.trim(),
@@ -38,6 +48,7 @@ const config = {
   misskeyChannelId: process.env.MISSKEY_CHANNEL_ID?.trim() || '',
   botUsernameOverride: process.env.BOT_USERNAME?.trim() || '',
   botUserIdOverride: process.env.BOT_USER_ID?.trim() || '',
+
   llmApiUrl: trimTrailingSlash(process.env.LLM_API_URL?.trim() || 'http://127.0.0.1:11434/v1/chat/completions'),
   llmApiKey: process.env.LLM_API_KEY?.trim() || 'ollama',
   llmModel: process.env.LLM_MODEL,
@@ -48,23 +59,52 @@ const config = {
   systemPrompt:
     process.env.SYSTEM_PROMPT?.trim() ||
     'You are a friendly Misskey bot. Reply naturally in Korean unless the user clearly uses another language.',
+
   enableAutoPost: parseBoolean(process.env.ENABLE_AUTO_POST, false),
   autoPostPrompt:
     process.env.AUTO_POST_PROMPT?.trim() ||
     'Write a short, natural social post suitable for Misskey. Avoid hashtags unless relevant.',
   autoPostMinMinutes: Math.max(1, parseNumber(process.env.AUTO_POST_MIN_MINUTES, 30)),
   autoPostMaxMinutes: Math.max(1, parseNumber(process.env.AUTO_POST_MAX_MINUTES, 240)),
+
   replyVisibilityMode: process.env.REPLY_VISIBILITY_MODE?.trim().toLowerCase() || 'inherit',
   replyDefaultVisibility: process.env.REPLY_DEFAULT_VISIBILITY?.trim().toLowerCase() || 'home',
   inheritLocalOnly: parseBoolean(process.env.INHERIT_LOCAL_ONLY, true),
   forceLocalOnly: parseBoolean(process.env.FORCE_LOCAL_ONLY, false),
+
   accessMode: process.env.ACCESS_MODE?.trim().toLowerCase() || 'following_or_local',
-  allowedInstance: normalizeHost(process.env.ALLOWED_INSTANCE || 'gameguard.moe'),
+  allowedInstance: normalizeHost(process.env.ALLOWED_INSTANCE || 'misskey.example.com'),
   autoFollowBack: parseBoolean(process.env.AUTO_FOLLOW_BACK, false),
   autoFollowLocalOnly: parseBoolean(process.env.AUTO_FOLLOW_LOCAL_ONLY, false),
+
   maxOutputChars: Math.max(10, parseNumber(process.env.MAX_OUTPUT_CHARS, 3000)),
-  relationDebug: parseBoolean(process.env.RELATION_DEBUG, false),
   logLevel: process.env.LOG_LEVEL?.trim().toLowerCase() || 'info',
+
+  enableImageGeneration: parseBoolean(process.env.ENABLE_IMAGE_GENERATION, false),
+  comfyBaseUrl: trimTrailingSlash(process.env.COMFYUI_BASE_URL?.trim() || 'http://host.docker.internal:8000'),
+  comfyWorkflowFile: process.env.COMFYUI_WORKFLOW_FILE?.trim() || '/app/workflows/anima_preview3_qwen_txt2img_api.json',
+  comfyDiffusionModel: process.env.COMFYUI_DIFFUSION_MODEL?.trim() || 'anima-preview3-base.safetensors',
+  comfyTextEncoder: process.env.COMFYUI_TEXT_ENCODER?.trim() || 'qwen_3_06b_base.safetensors',
+  comfyVae: process.env.COMFYUI_VAE?.trim() || 'qwen_image_vae.safetensors',
+  comfyWidth: Math.max(64, parseNumber(process.env.COMFYUI_WIDTH, 1024)),
+  comfyHeight: Math.max(64, parseNumber(process.env.COMFYUI_HEIGHT, 1024)),
+  comfyBatchSize: Math.max(1, parseNumber(process.env.COMFYUI_BATCH_SIZE, 1)),
+  comfySteps: Math.max(1, parseNumber(process.env.COMFYUI_STEPS, 50)),
+  comfyCfg: parseNumber(process.env.COMFYUI_CFG, 4.5),
+  comfySampler: process.env.COMFYUI_SAMPLER?.trim() || 'dpmpp_2m_sde_gpu',
+  comfyScheduler: process.env.COMFYUI_SCHEDULER?.trim() || 'normal',
+  comfyPositivePrefix: process.env.COMFYUI_POSITIVE_PREFIX?.trim() || 'masterpiece, best quality, score_7',
+  comfyNegative:
+    process.env.COMFYUI_NEGATIVE?.trim() ||
+    'worst quality, low quality, score_1, score_2, score_3, blurry, bad anatomy, bad hands, extra fingers, missing fingers, extra arms, extra legs, cropped hands',
+  comfyDenoise: parseNumber(process.env.COMFYUI_DENOISE, 1.0),
+  imageCommandPrefixes: (process.env.IMAGE_COMMAND_PREFIXES || '/img,/image,/그림')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean),
+  imageTimeoutSec: Math.max(5, parseNumber(process.env.IMAGE_TIMEOUT_SEC, 180)),
+  imagePollIntervalMs: Math.max(200, parseNumber(process.env.IMAGE_POLL_INTERVAL_MS, 1500)),
+  imageRequirePrefix: parseBoolean(process.env.IMAGE_REQUIRE_PREFIX, true),
 };
 
 const misskeyWsUrl = config.misskeyWsUrl
@@ -81,13 +121,14 @@ const misskeyHttp = axios.create({
 });
 
 const llmHttp = axios.create({ timeout: config.requestTimeoutMs });
+const comfyHttp = axios.create({
+  baseURL: config.comfyBaseUrl,
+  timeout: 30000,
+});
 
 const memoryByConversation = new Map();
 const processedNoteIds = new Set();
 const processedNoteTtlMs = 10 * 60 * 1000;
-const recentFollowbackUserIds = new Set();
-const recentFollowbackTtlMs = 60 * 1000;
-
 let botProfile = {
   id: config.botUserIdOverride || null,
   username: config.botUsernameOverride || null,
@@ -99,6 +140,7 @@ let pingInterval = null;
 let reconnectTimer = null;
 let currentBackoffMs = 5000;
 let autoPostTimer = null;
+let comfyWorkflowTemplate = null;
 
 function log(level, message, extra = undefined) {
   const order = { error: 0, warn: 1, info: 2, debug: 3 };
@@ -140,17 +182,23 @@ function pruneProcessedNote(id) {
   setTimeout(() => processedNoteIds.delete(id), processedNoteTtlMs).unref?.();
 }
 
-function rememberRecentFollowback(userId) {
-  recentFollowbackUserIds.add(userId);
-  setTimeout(() => recentFollowbackUserIds.delete(userId), recentFollowbackTtlMs).unref?.();
-}
-
 function sanitizeUserText(text) {
   let output = String(text || '').trim();
-  if (botProfile.username) {
-    const escaped = botProfile.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    output = output.replace(new RegExp(`@${escaped}\\b`, 'gi'), '').trim();
+  if (!botProfile.username) return output;
+
+  const escapedUsername = botProfile.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const instanceHost = normalizeHost(new URL(config.misskeyBaseUrl).host);
+  const escapedHost = instanceHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const patterns = [
+    new RegExp(`^\\s*@${escapedUsername}(?:@${escapedHost})?\\b[\\s,:-]*`, 'i'),
+    new RegExp(`@${escapedUsername}(?:@${escapedHost})?\\b`, 'gi'),
+  ];
+
+  for (const pattern of patterns) {
+    output = output.replace(pattern, ' ').trim();
   }
+
   return output;
 }
 
@@ -258,11 +306,9 @@ async function fetchUserRelation(userId) {
   try {
     const response = await misskeyHttp.post('/api/users/relation', { userId });
     const data = response.data;
-
     if (Array.isArray(data)) {
       return data[0] || {};
     }
-
     return data || {};
   } catch (error) {
     const details = error?.response?.data || error?.message || String(error);
@@ -277,86 +323,60 @@ function isLocalInstanceUser(noteOrUser) {
 }
 
 function relationAllowsFollowing(relation) {
-  return (
-    relation?.isFollowing === true ||
-    relation?.hasPendingFollowRequestFromYou === true
-  );
+  return relation?.isFollowing === true || relation?.hasPendingFollowRequestFromYou === true;
 }
 
 function relationAllowsFollower(relation) {
-  return (
-    relation?.isFollowed === true ||
-    relation?.hasPendingFollowRequestToYou === true
-  );
+  return relation?.isFollowed === true || relation?.hasPendingFollowRequestToYou === true;
 }
 
 function noteUserRelationAllowsFollowing(note) {
   const user = note?.user || {};
-  return (
-    user?.isFollowing === true ||
-    user?.hasPendingFollowRequestFromYou === true
-  );
+  return user?.isFollowing === true || user?.hasPendingFollowRequestFromYou === true;
 }
 
 function noteUserRelationAllowsFollower(note) {
   const user = note?.user || {};
-  return (
-    user?.isFollowed === true ||
-    user?.hasPendingFollowRequestToYou === true
-  );
+  return user?.isFollowed === true || user?.hasPendingFollowRequestToYou === true;
 }
 
 async function isAllowedSender(note) {
   const userId = getSenderId(note);
   if (!userId) return false;
-
   if (config.accessMode === 'off') return true;
   if (isLocalInstanceUser(note)) return true;
 
   switch (config.accessMode) {
     case 'local_only':
       return false;
-
     case 'followers_only':
       if (noteUserRelationAllowsFollower(note)) return true;
       break;
-
     case 'following_only':
       if (noteUserRelationAllowsFollowing(note)) return true;
       break;
-
     case 'followers_or_local':
       if (noteUserRelationAllowsFollower(note)) return true;
       break;
-
     case 'following_or_local':
       if (noteUserRelationAllowsFollowing(note)) return true;
       break;
-
     case 'mutual_or_local':
-      if (noteUserRelationAllowsFollowing(note) || noteUserRelationAllowsFollower(note)) {
-        return true;
-      }
+      if (noteUserRelationAllowsFollowing(note) || noteUserRelationAllowsFollower(note)) return true;
       break;
-
     default:
-      log('warn', 'Unknown ACCESS_MODE, falling back to following_or_local.', {
-        accessMode: config.accessMode,
-      });
+      log('warn', 'Unknown ACCESS_MODE, falling back to following_or_local.', { accessMode: config.accessMode });
       if (noteUserRelationAllowsFollowing(note)) return true;
       break;
   }
 
   const relation = await fetchUserRelation(userId);
-
-  if (config.relationDebug) {
-    log('info', 'Relation debug', {
-      userId,
-      username: note?.user?.username || null,
-      host: note?.user?.host || null,
-      relation,
-    });
-  }
+  log('debug', 'Relation debug', {
+    userId,
+    username: note?.user?.username || null,
+    host: note?.user?.host || null,
+    relation,
+  });
 
   switch (config.accessMode) {
     case 'local_only':
@@ -378,23 +398,38 @@ async function isAllowedSender(note) {
   }
 }
 
-function buildReplyPayload({ note, text }) {
+function buildReplyPayload({
+  note,
+  text = '',
+  fileIds = [],
+  visibilityOverride = null,
+  localOnlyOverride = null,
+}) {
   const payload = {
-    text: cutForMisskey(text),
     replyId: note.id,
   };
+
+  const finalText = cutForMisskey(text || '');
+  if (finalText) payload.text = finalText;
+  if (Array.isArray(fileIds) && fileIds.length > 0) payload.fileIds = fileIds;
 
   const channelId = note.channelId || config.misskeyChannelId;
   if (channelId) payload.channelId = channelId;
 
-  const shouldForceLocalOnly = config.forceLocalOnly;
-  const shouldInheritLocalOnly = config.inheritLocalOnly && note.localOnly === true;
-  if (shouldForceLocalOnly || shouldInheritLocalOnly) {
-    payload.localOnly = true;
+  if (localOnlyOverride !== null) {
+    payload.localOnly = localOnlyOverride === true;
+  } else {
+    const shouldForceLocalOnly = config.forceLocalOnly;
+    const shouldInheritLocalOnly = config.inheritLocalOnly && note.localOnly === true;
+    if (shouldForceLocalOnly || shouldInheritLocalOnly) {
+      payload.localOnly = true;
+    }
   }
 
   let visibility = config.replyDefaultVisibility;
-  if (config.replyVisibilityMode === 'inherit' && note.visibility) {
+  if (visibilityOverride) {
+    visibility = visibilityOverride;
+  } else if (config.replyVisibilityMode === 'inherit' && note.visibility) {
     visibility = note.visibility;
   }
 
@@ -415,13 +450,26 @@ async function sendNote(payload) {
   await misskeyHttp.post('/api/notes/create', payload);
 }
 
-async function sendReply(text, note) {
-  const payload = buildReplyPayload({ note, text });
+async function sendReply({
+  text = '',
+  note,
+  fileIds = [],
+  visibilityOverride = null,
+  localOnlyOverride = null,
+}) {
+  const payload = buildReplyPayload({
+    note,
+    text,
+    fileIds,
+    visibilityOverride,
+    localOnlyOverride,
+  });
   await sendNote(payload);
   log('info', 'Reply sent.', {
     replyTo: note.id,
     visibility: payload.visibility,
     channelId: payload.channelId || null,
+    hasFiles: Array.isArray(fileIds) && fileIds.length > 0,
   });
 }
 
@@ -467,6 +515,209 @@ function buildMessagesForReply(note, cleanedUserText) {
   ];
 }
 
+function normalizeCommandSource(text) {
+  return String(text || '').trim().replace(/^\s*[:,-]+\s*/, '').trim();
+}
+
+function getClampedImageReplyVisibility(note) {
+  const incomingVisibility = String(note?.visibility || '').toLowerCase();
+
+  switch (incomingVisibility) {
+    case 'home':
+    case 'followers':
+    case 'specified':
+      return incomingVisibility;
+    case 'public':
+    default:
+      return 'home';
+  }
+}
+
+function isImageCommand(text) {
+  const source = normalizeCommandSource(text);
+  if (!source) return false;
+  return config.imageCommandPrefixes.some((prefix) => source.startsWith(prefix));
+}
+
+function extractImagePrompt(text) {
+  const source = normalizeCommandSource(text);
+  const prefix = config.imageCommandPrefixes.find((p) => source.startsWith(p));
+  if (!prefix) return '';
+  return source.slice(prefix.length).trim();
+}
+
+async function loadComfyWorkflowTemplate() {
+  const raw = await fs.readFile(config.comfyWorkflowFile, 'utf-8');
+  return JSON.parse(raw);
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function setNodeInput(workflow, nodeId, key, value) {
+  const node = workflow?.[nodeId];
+  if (!node?.inputs) {
+    throw new Error(`Workflow node ${nodeId} not found`);
+  }
+  node.inputs[key] = value;
+}
+
+function buildComfyPromptPayload({ prompt, noteId }) {
+  if (!comfyWorkflowTemplate) {
+    throw new Error('ComfyUI workflow template is not loaded');
+  }
+
+  const workflow = cloneJson(comfyWorkflowTemplate);
+  const positive = config.comfyPositivePrefix ? `${config.comfyPositivePrefix}, ${prompt}` : prompt;
+
+  setNodeInput(workflow, '1', 'unet_name', config.comfyDiffusionModel);
+  setNodeInput(workflow, '2', 'clip_name', config.comfyTextEncoder);
+  setNodeInput(workflow, '3', 'vae_name', config.comfyVae);
+  setNodeInput(workflow, '4', 'text', positive);
+  setNodeInput(workflow, '5', 'text', config.comfyNegative);
+  setNodeInput(workflow, '6', 'width', config.comfyWidth);
+  setNodeInput(workflow, '6', 'height', config.comfyHeight);
+  setNodeInput(workflow, '6', 'batch_size', config.comfyBatchSize);
+  setNodeInput(workflow, '7', 'seed', crypto.randomInt(0, 2 ** 31 - 1));
+  setNodeInput(workflow, '7', 'steps', config.comfySteps);
+  setNodeInput(workflow, '7', 'cfg', config.comfyCfg);
+  setNodeInput(workflow, '7', 'sampler_name', config.comfySampler);
+  setNodeInput(workflow, '7', 'scheduler', config.comfyScheduler);
+  setNodeInput(workflow, '7', 'denoise', config.comfyDenoise);
+  setNodeInput(workflow, '9', 'filename_prefix', `misskey_${noteId}`);
+
+  return { prompt: workflow };
+}
+
+async function queueComfyPrompt(payload) {
+  const { data } = await comfyHttp.post('/prompt', payload, { timeout: 30000 });
+  return data;
+}
+
+async function getComfyHistory(promptId) {
+  const { data } = await comfyHttp.get(`/history/${encodeURIComponent(promptId)}`, { timeout: 30000 });
+  return data;
+}
+
+function extractFirstComfyImage(history, promptId) {
+  const entry = history?.[promptId];
+  if (!entry?.outputs) return null;
+
+  for (const node of Object.values(entry.outputs)) {
+    if (Array.isArray(node?.images) && node.images.length > 0) {
+      return node.images[0];
+    }
+  }
+
+  return null;
+}
+
+async function waitForComfyImage(promptId) {
+  const startedAt = Date.now();
+  const timeoutMs = config.imageTimeoutSec * 1000;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const history = await getComfyHistory(promptId);
+    const image = extractFirstComfyImage(history, promptId);
+    if (image) return image;
+
+    await new Promise((resolve) => setTimeout(resolve, config.imagePollIntervalMs));
+  }
+
+  throw new Error('ComfyUI image generation timed out');
+}
+
+async function downloadComfyImage(imageMeta) {
+  const params = new URLSearchParams({
+    filename: imageMeta.filename,
+    subfolder: imageMeta.subfolder || '',
+    type: imageMeta.type || 'output',
+  });
+
+  const response = await comfyHttp.get(`/view?${params.toString()}`, {
+    responseType: 'arraybuffer',
+    timeout: 60000,
+  });
+
+  return {
+    buffer: Buffer.from(response.data),
+    filename: imageMeta.filename || 'generated.png',
+    mimeType: guessMimeType(imageMeta.filename),
+  };
+}
+
+async function uploadBufferToMisskeyDrive({ buffer, filename, mimeType }) {
+  const form = new FormData();
+  form.append('i', config.misskeyToken);
+  form.append('file', buffer, {
+    filename,
+    contentType: mimeType,
+  });
+
+  const response = await axios.post(`${config.misskeyBaseUrl}/api/drive/files/create`, form, {
+    headers: form.getHeaders(),
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    timeout: 120000,
+  });
+
+  return response.data;
+}
+
+async function generateImageViaComfy({ prompt, noteId }) {
+  const payload = buildComfyPromptPayload({ prompt, noteId });
+  const queued = await queueComfyPrompt(payload);
+  const promptId = queued?.prompt_id;
+
+  if (!promptId) {
+    throw new Error('ComfyUI did not return prompt_id');
+  }
+
+  log('info', 'Queued image generation.', { noteId, promptId });
+
+  const imageMeta = await waitForComfyImage(promptId);
+  const downloaded = await downloadComfyImage(imageMeta);
+  const uploaded = await uploadBufferToMisskeyDrive(downloaded);
+  return uploaded;
+}
+
+async function handleImageCommand(note, cleanedUserText) {
+  const imagePrompt = extractImagePrompt(cleanedUserText);
+  const imageVisibility = getClampedImageReplyVisibility(note);
+
+  if (!imagePrompt) {
+    await sendReply({
+      note,
+      text: `사용법: ${config.imageCommandPrefixes[0] || '/img'} 프롬프트`,
+      visibilityOverride: imageVisibility,
+    });
+    return;
+  }
+
+  try {
+    const uploadedFile = await generateImageViaComfy({
+      prompt: imagePrompt,
+      noteId: note.id,
+    });
+
+    await sendReply({
+      note,
+      text: '',
+      fileIds: [uploadedFile.id],
+      visibilityOverride: imageVisibility,
+    });
+  } catch (error) {
+    const details = error?.response?.data || error?.message || String(error);
+    log('error', 'Failed to generate image via ComfyUI.', { noteId: note.id, details });
+    await sendReply({
+      note,
+      text: '이미지 생성 중 오류가 발생했어요. ComfyUI 상태와 모델/워크플로 설정을 확인해 주세요.',
+      visibilityOverride: imageVisibility,
+    });
+  }
+}
+
 async function handleIncomingNote(note) {
   if (!note || !note.id) return;
   if (processedNoteIds.has(note.id)) return;
@@ -494,6 +745,17 @@ async function handleIncomingNote(note) {
     return;
   }
 
+  if (config.enableImageGeneration && isImageCommand(cleanedUserText)) {
+    log('info', 'Handling image command.', {
+      noteId: note.id,
+      userId: getSenderId(note),
+      username: note.user?.username || null,
+      host: note.user?.host || null,
+    });
+    await handleImageCommand(note, cleanedUserText);
+    return;
+  }
+
   const conversationKey = getConversationKey(note);
   addToConversationMemory(conversationKey, 'user', cleanedUserText);
 
@@ -506,7 +768,7 @@ async function handleIncomingNote(note) {
       return;
     }
 
-    await sendReply(replyText, note);
+    await sendReply({ text: replyText, note });
     addToConversationMemory(conversationKey, 'assistant', replyText);
   } catch (error) {
     const apiError = error?.response?.data || error?.message || String(error);
@@ -516,12 +778,7 @@ async function handleIncomingNote(note) {
 
 function shouldHandleEvent(eventType, note) {
   if (!note || !getSenderId(note)) return false;
-
-  if (eventType === 'mention') {
-    return true;
-  }
-
-  if (eventType !== 'reply') return false;
+  if (eventType !== 'mention' && eventType !== 'reply') return false;
 
   const replyToBot = note.reply?.userId === botProfile.id || note.reply?.user?.id === botProfile.id;
   const mentionedBot = botProfile.username
@@ -543,7 +800,6 @@ async function followBackUser(user) {
   }
 
   if (botProfile?.id && userId === botProfile.id) return;
-  if (recentFollowbackUserIds.has(userId)) return;
   if (config.autoFollowLocalOnly && !isLocalInstanceUser(user)) {
     log('info', 'Skipped auto-follow for non-local user.', {
       userId,
@@ -554,7 +810,6 @@ async function followBackUser(user) {
   }
 
   try {
-    rememberRecentFollowback(userId);
     await misskeyHttp.post('/api/following/create', { userId });
     log('info', 'Auto-followed user.', {
       userId,
@@ -724,6 +979,17 @@ async function main() {
   const profile = await fetchBotProfile();
   log('info', `Logged in as @${profile.username}${profile.name ? ` (${profile.name})` : ''}`);
 
+  if (config.enableImageGeneration) {
+    comfyWorkflowTemplate = await loadComfyWorkflowTemplate();
+    log('info', 'Loaded ComfyUI workflow template.', {
+      workflowFile: config.comfyWorkflowFile,
+      comfyBaseUrl: config.comfyBaseUrl,
+      diffusionModel: config.comfyDiffusionModel,
+      textEncoder: config.comfyTextEncoder,
+      vae: config.comfyVae,
+    });
+  }
+
   connectWebSocket();
   scheduleNextAutoPost();
   log('info', 'Bot is running.', {
@@ -731,7 +997,7 @@ async function main() {
     autoFollowBack: config.autoFollowBack,
     autoFollowLocalOnly: config.autoFollowLocalOnly,
     allowedInstance: config.allowedInstance,
-    relationDebug: config.relationDebug,
+    imageGeneration: config.enableImageGeneration,
   });
 }
 
@@ -745,7 +1011,9 @@ function shutdown(signal) {
   if (ws) {
     try {
       ws.close(1000, 'shutdown');
-    } catch {}
+    } catch {
+      // ignore
+    }
     ws = null;
   }
   setTimeout(() => process.exit(0), 250).unref?.();

@@ -1,0 +1,1 @@
+Misskey bot for Ollama/OpenAI-compatible text replies and optional ComfyUI image generation, built for Docker Compose and Apple Silicon workflows.

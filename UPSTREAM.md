@@ -7,4 +7,6 @@ This project keeps the original MIT-licensed basis but substantially rewrites th
 - Docker Compose deployment
 - access filtering for local and remote users
 - automatic follow-back support
-- support for Ollama native API and OpenAI-compatible APIs
+- support for Ollama/OpenAI-compatible text APIs
+- optional ComfyUI image generation
+- image reply visibility clamping (public -> home)

@@ -7,6 +7,7 @@ COPY package.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
 COPY bot.js ./
+COPY workflows ./workflows/
 
 RUN chown -R node:node /app
 USER node

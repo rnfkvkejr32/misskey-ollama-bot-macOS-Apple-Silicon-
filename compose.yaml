@@ -1,11 +1,13 @@
 services:
-  misskey-ollama-bot:
+  misskey-llm-bot:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./workflows:/app/workflows:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
