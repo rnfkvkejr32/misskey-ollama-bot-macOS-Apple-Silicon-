@@ -49,7 +49,7 @@ const config = {
   botUsernameOverride: process.env.BOT_USERNAME?.trim() || '',
   botUserIdOverride: process.env.BOT_USER_ID?.trim() || '',
 
-  llmApiUrl: trimTrailingSlash(process.env.LLM_API_URL?.trim() || 'http://127.0.0.1:11434/v1/chat/completions'),
+  llmApiUrl: trimTrailingSlash(process.env.LLM_API_URL?.trim() || 'http://host.docker.internal:11434/v1/chat/completions'),
   llmApiKey: process.env.LLM_API_KEY?.trim() || 'ollama',
   llmModel: process.env.LLM_MODEL,
   maxMemory: Math.max(0, parseNumber(process.env.MAX_MEMORY, 20)),
@@ -73,7 +73,7 @@ const config = {
   forceLocalOnly: parseBoolean(process.env.FORCE_LOCAL_ONLY, false),
 
   accessMode: process.env.ACCESS_MODE?.trim().toLowerCase() || 'following_or_local',
-  allowedInstance: normalizeHost(process.env.ALLOWED_INSTANCE || 'misskey.example.com'),
+  allowedInstance: normalizeHost(process.env.ALLOWED_INSTANCE || ''),
   autoFollowBack: parseBoolean(process.env.AUTO_FOLLOW_BACK, false),
   autoFollowLocalOnly: parseBoolean(process.env.AUTO_FOLLOW_LOCAL_ONLY, false),
 
@@ -82,7 +82,7 @@ const config = {
 
   enableImageGeneration: parseBoolean(process.env.ENABLE_IMAGE_GENERATION, false),
   comfyBaseUrl: trimTrailingSlash(process.env.COMFYUI_BASE_URL?.trim() || 'http://host.docker.internal:8000'),
-  comfyWorkflowFile: process.env.COMFYUI_WORKFLOW_FILE?.trim() || '/app/workflows/anima_preview3_qwen_txt2img_api.json',
+  comfyWorkflowFile: process.env.COMFYUI_WORKFLOW_FILE?.trim() || '/app/workflows/comfyui_api_workflow.json',
   comfyDiffusionModel: process.env.COMFYUI_DIFFUSION_MODEL?.trim() || 'anima-preview3-base.safetensors',
   comfyTextEncoder: process.env.COMFYUI_TEXT_ENCODER?.trim() || 'qwen_3_06b_base.safetensors',
   comfyVae: process.env.COMFYUI_VAE?.trim() || 'qwen_image_vae.safetensors',
@@ -105,6 +105,15 @@ const config = {
   imageTimeoutSec: Math.max(5, parseNumber(process.env.IMAGE_TIMEOUT_SEC, 180)),
   imagePollIntervalMs: Math.max(200, parseNumber(process.env.IMAGE_POLL_INTERVAL_MS, 1500)),
   imageRequirePrefix: parseBoolean(process.env.IMAGE_REQUIRE_PREFIX, true),
+    enableNsfwFilter: parseBoolean(process.env.ENABLE_NSFW_FILTER, true),
+  nsfwApiBaseUrl: trimTrailingSlash(process.env.NSFW_API_BASE_URL?.trim() || 'http://nsfw-api:8000'),
+  nsfwRequestTimeoutMs: Math.max(1000, parseNumber(process.env.NSFW_REQUEST_TIMEOUT_MS, 120000)),
+  nsfwBlockReview: parseBoolean(process.env.NSFW_BLOCK_REVIEW, true),
+  nsfwBlockScore: parseNumber(process.env.NSFW_BLOCK_SCORE, 0.8),
+  nsfwQuarantineDir: process.env.NSFW_QUARANTINE_DIR?.trim() || '/app/quarantine',
+  imageBlockedReplyText:
+    process.env.IMAGE_BLOCKED_REPLY_TEXT?.trim() ||
+    '생성된 이미지가 안전 기준에 맞지 않아 첨부하지 않았어요.',
 };
 
 const misskeyWsUrl = config.misskeyWsUrl
@@ -647,6 +656,105 @@ async function downloadComfyImage(imageMeta) {
   };
 }
 
+function sanitizeFilename(name) {
+  return String(name || 'generated.png')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 120);
+}
+
+async function classifyImageBufferViaNsfwApi({ buffer, filename, mimeType }) {
+  if (!config.enableNsfwFilter) {
+    return {
+      enabled: false,
+      label: 'safe',
+      score: 0,
+      raw: null,
+      shouldBlock: false,
+    };
+  }
+
+  const form = new FormData();
+  form.append('file', buffer, {
+    filename: filename || `generated-${Date.now()}.png`,
+    contentType: mimeType || 'image/png',
+  });
+
+  const response = await axios.post(`${config.nsfwApiBaseUrl}/predict/upload`, form, {
+    headers: form.getHeaders(),
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    timeout: config.nsfwRequestTimeoutMs,
+  });
+
+  const raw = response.data || {};
+  const score = Number(raw.score ?? raw.nsfw_score ?? 0);
+  const label = String(raw.label || '').trim().toLowerCase() || (score >= config.nsfwBlockScore ? 'nsfw' : 'safe');
+
+  const shouldBlock =
+    label === 'nsfw' ||
+    (config.nsfwBlockReview && label === 'review') ||
+    score >= config.nsfwBlockScore;
+
+  return {
+    enabled: true,
+    label,
+    score,
+    raw,
+    shouldBlock,
+  };
+}
+
+async function quarantineBlockedImage({ buffer, filename, label, score, noteId }) {
+  if (!config.nsfwQuarantineDir) return null;
+
+  await fs.mkdir(config.nsfwQuarantineDir, { recursive: true });
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const safeName = sanitizeFilename(filename || 'generated.png');
+  const safeLabel = sanitizeFilename(label || 'blocked');
+  const roundedScore = Number.isFinite(score) ? score.toFixed(4) : 'unknown';
+  const prefix = noteId ? `note-${sanitizeFilename(noteId)}_` : '';
+  const target = `${config.nsfwQuarantineDir}/${prefix}${stamp}_${safeLabel}_${roundedScore}_${safeName}`;
+
+  await fs.writeFile(target, buffer);
+  return target;
+}
+
+async function moderateGeneratedImageBeforeUpload(downloaded, { noteId, prompt }) {
+  const moderation = await classifyImageBufferViaNsfwApi(downloaded);
+
+  if (!moderation.shouldBlock) {
+    return {
+      allowUpload: true,
+      ...moderation,
+      quarantinedPath: null,
+    };
+  }
+
+  const quarantinedPath = await quarantineBlockedImage({
+    buffer: downloaded.buffer,
+    filename: downloaded.filename,
+    label: moderation.label,
+    score: moderation.score,
+    noteId,
+  });
+
+  log('warn', 'Blocked generated image before Misskey upload.', {
+    noteId,
+    label: moderation.label,
+    score: moderation.score,
+    quarantinedPath,
+    promptPreview: String(prompt || '').slice(0, 120),
+  });
+
+  return {
+    allowUpload: false,
+    ...moderation,
+    quarantinedPath,
+  };
+}
+
 async function uploadBufferToMisskeyDrive({ buffer, filename, mimeType }) {
   const form = new FormData();
   form.append('i', config.misskeyToken);
@@ -678,34 +786,57 @@ async function generateImageViaComfy({ prompt, noteId }) {
 
   const imageMeta = await waitForComfyImage(promptId);
   const downloaded = await downloadComfyImage(imageMeta);
-  const uploaded = await uploadBufferToMisskeyDrive(downloaded);
-  return uploaded;
+
+  const moderation = await moderateGeneratedImageBeforeUpload(downloaded, {
+    noteId,
+    prompt,
+  });
+
+  if (!moderation.allowUpload) {
+    return {
+      blocked: true,
+      moderation,
+      uploadedFile: null,
+    };
+  }
+
+  const uploadedFile = await uploadBufferToMisskeyDrive(downloaded);
+
+  return {
+    blocked: false,
+    moderation,
+    uploadedFile,
+  };
 }
 
 async function handleImageCommand(note, cleanedUserText) {
   const imagePrompt = extractImagePrompt(cleanedUserText);
-  const imageVisibility = getClampedImageReplyVisibility(note);
-
   if (!imagePrompt) {
     await sendReply({
       note,
       text: `사용법: ${config.imageCommandPrefixes[0] || '/img'} 프롬프트`,
-      visibilityOverride: imageVisibility,
     });
     return;
   }
 
   try {
-    const uploadedFile = await generateImageViaComfy({
+    const result = await generateImageViaComfy({
       prompt: imagePrompt,
       noteId: note.id,
     });
 
+    if (result.blocked) {
+      await sendReply({
+        note,
+        text: config.imageBlockedReplyText,
+      });
+      return;
+    }
+
     await sendReply({
       note,
       text: '',
-      fileIds: [uploadedFile.id],
-      visibilityOverride: imageVisibility,
+      fileIds: [result.uploadedFile.id],
     });
   } catch (error) {
     const details = error?.response?.data || error?.message || String(error);
@@ -713,7 +844,6 @@ async function handleImageCommand(note, cleanedUserText) {
     await sendReply({
       note,
       text: '이미지 생성 중 오류가 발생했어요. ComfyUI 상태와 모델/워크플로 설정을 확인해 주세요.',
-      visibilityOverride: imageVisibility,
     });
   }
 }

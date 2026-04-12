@@ -1,6 +1,12 @@
-node_modules/
 .env
-.env.*
-!.env.example
-npm-debug.log*
+node_modules/
+quarantine/*
+!quarantine/.gitkeep
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+nsfw-cache/*
+!nsfw-cache/.gitkeep
+*.log
 .DS_Store

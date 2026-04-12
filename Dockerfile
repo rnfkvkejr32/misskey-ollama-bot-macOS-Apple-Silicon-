@@ -1,15 +1,14 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
-WORKDIR /app
 ENV NODE_ENV=production
+WORKDIR /app
 
 COPY package.json ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev
 
 COPY bot.js ./
-COPY workflows ./workflows/
+COPY workflows ./workflows
 
-RUN chown -R node:node /app
-USER node
+RUN mkdir -p /app/quarantine /app/workflows
 
 CMD ["node", "bot.js"]

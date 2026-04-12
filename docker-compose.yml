@@ -1,0 +1,54 @@
+services:
+  misskey-llm-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: misskey-llm-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - nsfw-api
+    volumes:
+      - ./workflows:/app/workflows:ro
+      - ./quarantine:/app/quarantine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nsfw-api:
+    build:
+      context: ./nsfw-service
+      dockerfile: Dockerfile
+    container_name: opennsfw2-api
+    environment:
+      APP_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8000
+      OPENNSFW2_HOME: /models
+      KERAS_BACKEND: tensorflow
+      SAFE_THRESHOLD: ${NSFW_SAFE_THRESHOLD:-0.2}
+      NSFW_THRESHOLD: ${NSFW_THRESHOLD:-0.8}
+      MAX_UPLOAD_MB: ${NSFW_MAX_UPLOAD_MB:-20}
+    ports:
+      - "8088:8000"
+    volumes:
+      - ./nsfw-cache:/models
+      - ./input:/data/input
+      - ./output:/data/output
+    restart: unless-stopped
+
+  nsfw-cli:
+    build:
+      context: ./nsfw-service
+      dockerfile: Dockerfile
+    profiles: ["cli"]
+    environment:
+      OPENNSFW2_HOME: /models
+      KERAS_BACKEND: tensorflow
+      SAFE_THRESHOLD: ${NSFW_SAFE_THRESHOLD:-0.2}
+      NSFW_THRESHOLD: ${NSFW_THRESHOLD:-0.8}
+    volumes:
+      - ./nsfw-cache:/models
+      - ./input:/data/input
+      - ./output:/data/output
+    entrypoint: ["python", "-m", "app.cli"]

@@ -2,16 +2,13 @@
   "1": {
     "class_type": "UNETLoader",
     "inputs": {
-      "unet_name": "anima-preview3-base.safetensors",
-      "weight_dtype": "default"
+      "unet_name": "anima-preview3-base.safetensors"
     }
   },
   "2": {
     "class_type": "CLIPLoader",
     "inputs": {
-      "clip_name": "qwen_3_06b_base.safetensors",
-      "type": "qwen_image",
-      "device": "default"
+      "clip_name": "qwen_3_06b_base.safetensors"
     }
   },
   "3": {
@@ -23,7 +20,7 @@
   "4": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "text": "masterpiece, best quality, score_7, 1girl, solo, detailed anime illustration",
+      "text": "masterpiece, best quality, score_7, sample prompt",
       "clip": [
         "2",
         0
@@ -33,7 +30,7 @@
   "5": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "text": "worst quality, low quality, score_1, score_2, score_3, blurry, bad anatomy, bad hands, extra fingers, missing fingers, extra arms, extra legs, cropped hands",
+      "text": "worst quality, low quality",
       "clip": [
         "2",
         0
@@ -41,7 +38,7 @@
     }
   },
   "6": {
-    "class_type": "EmptySD3LatentImage",
+    "class_type": "EmptyLatentImage",
     "inputs": {
       "width": 1024,
       "height": 1024,
@@ -51,7 +48,7 @@
   "7": {
     "class_type": "KSampler",
     "inputs": {
-      "seed": 1,
+      "seed": 0,
       "steps": 50,
       "cfg": 4.5,
       "sampler_name": "dpmpp_2m_sde_gpu",
@@ -91,7 +88,7 @@
   "9": {
     "class_type": "SaveImage",
     "inputs": {
-      "filename_prefix": "misskey_anima",
+      "filename_prefix": "misskey_sample",
       "images": [
         "8",
         0

@@ -1,9 +1,9 @@
 {
-  "name": "misskey-llm-bot-comfyui",
+  "name": "misskey-llm-bot",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Misskey mention bot for Ollama/OpenAI-compatible APIs with optional ComfyUI image generation, access control, and follow-back support.",
+  "description": "Self-hosted Misskey LLM bot with ComfyUI image generation and NSFW moderation subservice.",
   "scripts": {
     "start": "node bot.js",
     "check": "node --check bot.js"
